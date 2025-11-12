@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dynamic Income & Expense Calculator</title>
+    <!-- Link to external stylesheet -->
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <h1>Income & Expense Estimator</h1>
+
+    <!-- Section: Income input -->
+    <section id="income-section">
+        <h2>Income Details</h2>
+        <div class="row">
+            <label>
+                <input type="radio" name="incomeType" value="salary" id="salaryRadio" checked>
+                Annual salary
+            </label>
+            <label>
+                <input type="radio" name="incomeType" value="hourly" id="hourlyRadio">
+                Hourly wage
+            </label>
+        </div>
+
+        <!-- Annual salary inputs -->
+        <div id="salaryInputs" class="inputs-group">
+            <label for="annualSalary">Annual salary ($):</label>
+            <input type="number" id="annualSalary" min="0" step="0.01" placeholder="Enter annual salary">
+        </div>
+
+        <!-- Hourly wage inputs -->
+        <div id="hourlyInputs" class="inputs-group hidden">
+            <label for="hourlyWage">Hourly wage ($):</label>
+            <input type="number" id="hourlyWage" min="0" step="0.01" placeholder="Hourly rate">
+
+            <label for="hoursPerWeek">Hours per week:</label>
+            <input type="number" id="hoursPerWeek" min="0" step="0.1" value="40">
+
+            <label for="overtimeHours">Overtime hours per week:</label>
+            <input type="number" id="overtimeHours" min="0" step="0.1" value="0">
+
+            <label for="overtimeMultiplier">Overtime rate multiplier:</label>
+            <input type="number" id="overtimeMultiplier" min="1" step="0.1" value="1.5">
+        </div>
+
+        <div class="row">
+            <label for="stateSelect">Select your state:</label>
+            <select id="stateSelect"></select>
+
+            <label for="filingStatus">Filing status:</label>
+            <select id="filingStatus">
+                <option value="single">Single</option>
+                <option value="married">Married Filing Jointly</option>
+                <option value="head">Head of Household</option>
+            </select>
+        </div>
+    </section>
+
+    <!-- Section: Calculated income table -->
+    <section id="results-section">
+        <h2>Income Breakdown</h2>
+        <table id="incomeTable">
+            <thead>
+                <tr>
+                    <th>Period</th>
+                    <th>Gross Income</th>
+                    <th>Net Income</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>Annual</td>
+                    <td id="grossAnnual">$0.00</td>
+                    <td id="netAnnual">$0.00</td>
+                </tr>
+                <tr>
+                    <td>Monthly</td>
+                    <td id="grossMonthly">$0.00</td>
+                    <td id="netMonthly">$0.00</td>
+                </tr>
+                <tr>
+                    <td>Bi‑Weekly</td>
+                    <td id="grossBiWeekly">$0.00</td>
+                    <td id="netBiWeekly">$0.00</td>
+                </tr>
+                <tr>
+                    <td>Weekly</td>
+                    <td id="grossWeekly">$0.00</td>
+                    <td id="netWeekly">$0.00</td>
+                </tr>
+                <tr>
+                    <td>Hourly</td>
+                    <td id="grossHourly">$0.00</td>
+                    <td id="netHourly">$0.00</td>
+                </tr>
+            </tbody>
+        </table>
+    </section>
+
+    <!-- Section: Living expenses -->
+    <section id="expenses-section">
+        <h2>Monthly Living Expenses</h2>
+        <!-- Housing -->
+        <div class="expense-category">
+            <h3>Housing</h3>
+            <div class="row">
+                <label for="housingType">Type:</label>
+                <select id="housingType">
+                    <option value="rent">Rent</option>
+                    <option value="mortgage">Mortgage</option>
+                </select>
+                <label for="housingAmount">Amount ($/month):</label>
+                <input type="number" id="housingAmount" min="0" step="0.01" value="0">
+                <label id="propertyTaxLabel" for="propertyTax" class="hidden">Property tax ($/month):</label>
+                <input type="number" id="propertyTax" min="0" step="0.01" value="0" class="hidden">
+            </div>
+            <div id="housingExtras" class="extras-container"></div>
+            <button type="button" class="add-item-btn" onclick="addCustomItem('housingExtras')">Add custom item</button>
+        </div>
+
+        <!-- Utilities -->
+        <div class="expense-category">
+            <h3>Utilities</h3>
+            <div class="row">
+                <label for="utilitiesBase">Bundled utilities ($/month):</label>
+                <input type="number" id="utilitiesBase" min="0" step="0.01" value="0" title="Enter any base/bundled utilities costs included in rental agreement here. Add other specific items as needed.">
+            </div>
+            <div id="utilitiesExtras" class="extras-container"></div>
+            <button type="button" class="add-item-btn" onclick="addCustomItem('utilitiesExtras')">Add custom item</button>
+        </div>
+
+        <!-- Travel expenses -->
+        <div class="expense-category">
+            <h3>Travel Expenses</h3>
+            <div class="checkbox-group">
+                <label><input type="checkbox" id="vehicleCheckbox"> Owned/Leased Vehicle</label>
+                <label><input type="checkbox" id="publicTransportCheckbox"> Public transportation</label>
+                <label><input type="checkbox" id="rideShareCheckbox"> Taxi/Uber/Ride Share</label>
+                <label><input type="checkbox" id="miscTravelCheckbox"> Miscellaneous travel</label>
+            </div>
+            <!-- Vehicle section -->
+            <div id="vehicleSection" class="travel-section hidden">
+                <label for="vehiclePayment">Monthly payment ($):</label>
+                <input type="number" id="vehiclePayment" min="0" step="0.01" value="0">
+                <label for="autoInsuranceAmount">Automotive insurance ($):</label>
+                <input type="number" id="autoInsuranceAmount" min="0" step="0.01" value="0">
+                <label for="autoInsurancePeriod">Insurance pay period:</label>
+                <select id="autoInsurancePeriod">
+                    <option value="1">Monthly</option>
+                    <option value="3">Quarterly (every 3 months)</option>
+                    <option value="6">Semi‑annually (every 6 months)</option>
+                    <option value="12">Annually</option>
+                </select>
+                <div id="vehicleExtras" class="extras-container"></div>
+                <button type="button" class="add-item-btn" onclick="addCustomItem('vehicleExtras')">Add custom item</button>
+            </div>
+            <!-- Public transport section -->
+            <div id="publicTransportSection" class="travel-section hidden">
+                <div id="publicTransportExtras" class="extras-container"></div>
+                <button type="button" class="add-item-btn" onclick="addCustomItem('publicTransportExtras')">Add custom item</button>
+            </div>
+            <!-- Ride share section -->
+            <div id="rideShareSection" class="travel-section hidden">
+                <div id="rideShareExtras" class="extras-container"></div>
+                <button type="button" class="add-item-btn" onclick="addCustomItem('rideShareExtras')">Add custom item</button>
+            </div>
+            <!-- Misc travel section -->
+            <div id="miscTravelSection" class="travel-section hidden">
+                <div id="miscTravelExtras" class="extras-container"></div>
+                <button type="button" class="add-item-btn" onclick="addCustomItem('miscTravelExtras')">Add custom item</button>
+            </div>
+        </div>
+
+        <!-- Food and groceries -->
+        <div class="expense-category">
+            <h3>Food &amp; Groceries</h3>
+            <label for="foodExpenses">Monthly amount ($):</label>
+            <input type="number" id="foodExpenses" min="0" step="0.01" value="0">
+        </div>
+
+        <!-- Additional expenses -->
+        <div class="expense-category">
+            <h3>Additional Expenses</h3>
+            <div id="additionalExpenses" class="extras-container"></div>
+            <button type="button" class="add-item-btn" onclick="addCustomItem('additionalExpenses')">Add custom item</button>
+        </div>
+    </section>
+
+    <!-- Summary section -->
+    <section id="summary-section">
+        <h2>Summary</h2>
+        <p>Total monthly expenses: <span id="totalExpenses">$0.00</span></p>
+        <p>Remaining monthly income after expenses: <span id="remainingIncome">$0.00</span></p>
+    </section>
+
+    <!-- Link to the JavaScript file -->
+    <script src="script.js"></script>
+</body>
+</html>
