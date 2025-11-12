@@ -1,0 +1,302 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payroll Calculator</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .calculator-container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+            padding: 40px;
+            max-width: 500px;
+            width: 100%;
+        }
+
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 28px;
+        }
+
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+
+        .input-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #555;
+            font-weight: 500;
+        }
+
+        input[type="number"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        input[type="number"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 25px;
+        }
+
+        button {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .calculate-btn {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+
+        .calculate-btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(102, 126, 234, 0.4);
+        }
+
+        .reset-btn {
+            background: #f5f5f5;
+            color: #666;
+        }
+
+        .reset-btn:hover {
+            background: #e0e0e0;
+            transform: translateY(-2px);
+        }
+
+        .results {
+            margin-top: 30px;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            display: none;
+        }
+
+        .results.active {
+            display: block;
+        }
+
+        .results h2 {
+            color: #333;
+            margin-bottom: 15px;
+            font-size: 20px;
+        }
+
+        .result-item {
+            display: flex;
+            justify-content: space-between;
+            padding: 10px 0;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .result-item:last-child {
+            border-bottom: none;
+            font-weight: bold;
+            font-size: 18px;
+            color: #667eea;
+            padding-top: 15px;
+        }
+
+        .result-label {
+            color: #666;
+        }
+
+        .result-value {
+            color: #333;
+            font-weight: 500;
+        }
+
+        .error {
+            color: #e74c3c;
+            font-size: 14px;
+            margin-top: 5px;
+            display: none;
+        }
+
+        .error.active {
+            display: block;
+        }
+    </style>
+</head>
+<body>
+    <div class="calculator-container">
+        <h1>💰 Payroll Calculator</h1>
+        <p class="subtitle">A simple, dynamic calculator for your payroll and monthly expenses</p>
+        
+        <form id="payrollForm">
+            <div class="input-group">
+                <label for="hourlyRate">Hourly Rate ($)</label>
+                <input type="number" id="hourlyRate" step="0.01" min="0" placeholder="Enter hourly rate" required>
+                <div class="error" id="hourlyRateError">Please enter a valid hourly rate</div>
+            </div>
+
+            <div class="input-group">
+                <label for="hoursWorked">Hours Worked</label>
+                <input type="number" id="hoursWorked" step="0.5" min="0" placeholder="Enter hours worked" required>
+                <div class="error" id="hoursWorkedError">Please enter valid hours worked</div>
+            </div>
+
+            <div class="input-group">
+                <label for="taxRate">Tax Rate (%)</label>
+                <input type="number" id="taxRate" step="0.1" min="0" max="100" value="20" placeholder="Enter tax rate" required>
+                <div class="error" id="taxRateError">Please enter a valid tax rate (0-100)</div>
+            </div>
+
+            <div class="input-group">
+                <label for="monthlyExpenses">Monthly Expenses ($)</label>
+                <input type="number" id="monthlyExpenses" step="0.01" min="0" value="0" placeholder="Enter monthly expenses">
+                <div class="error" id="monthlyExpensesError">Please enter valid monthly expenses</div>
+            </div>
+
+            <div class="button-group">
+                <button type="submit" class="calculate-btn">Calculate</button>
+                <button type="button" class="reset-btn" onclick="resetCalculator()">Reset</button>
+            </div>
+        </form>
+
+        <div class="results" id="results">
+            <h2>Results</h2>
+            <div class="result-item">
+                <span class="result-label">Gross Pay:</span>
+                <span class="result-value" id="grossPay">$0.00</span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">Tax Amount:</span>
+                <span class="result-value" id="taxAmount">$0.00</span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">Net Pay:</span>
+                <span class="result-value" id="netPay">$0.00</span>
+            </div>
+            <div class="result-item">
+                <span class="result-label">After Expenses:</span>
+                <span class="result-value" id="afterExpenses">$0.00</span>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const form = document.getElementById('payrollForm');
+        const results = document.getElementById('results');
+
+        form.addEventListener('submit', function(e) {
+            e.preventDefault();
+            calculatePayroll();
+        });
+
+        function calculatePayroll() {
+            // Get input values
+            const hourlyRate = parseFloat(document.getElementById('hourlyRate').value);
+            const hoursWorked = parseFloat(document.getElementById('hoursWorked').value);
+            const taxRate = parseFloat(document.getElementById('taxRate').value);
+            const monthlyExpenses = parseFloat(document.getElementById('monthlyExpenses').value) || 0;
+
+            // Clear previous errors
+            document.querySelectorAll('.error').forEach(error => error.classList.remove('active'));
+
+            // Validate inputs
+            let hasError = false;
+
+            if (isNaN(hourlyRate) || hourlyRate < 0) {
+                document.getElementById('hourlyRateError').classList.add('active');
+                hasError = true;
+            }
+
+            if (isNaN(hoursWorked) || hoursWorked < 0) {
+                document.getElementById('hoursWorkedError').classList.add('active');
+                hasError = true;
+            }
+
+            if (isNaN(taxRate) || taxRate < 0 || taxRate > 100) {
+                document.getElementById('taxRateError').classList.add('active');
+                hasError = true;
+            }
+
+            if (isNaN(monthlyExpenses) || monthlyExpenses < 0) {
+                document.getElementById('monthlyExpensesError').classList.add('active');
+                hasError = true;
+            }
+
+            if (hasError) {
+                results.classList.remove('active');
+                return;
+            }
+
+            // Calculate payroll
+            const grossPay = hourlyRate * hoursWorked;
+            const taxAmount = grossPay * (taxRate / 100);
+            const netPay = grossPay - taxAmount;
+            const afterExpenses = netPay - monthlyExpenses;
+
+            // Display results
+            document.getElementById('grossPay').textContent = '$' + grossPay.toFixed(2);
+            document.getElementById('taxAmount').textContent = '$' + taxAmount.toFixed(2);
+            document.getElementById('netPay').textContent = '$' + netPay.toFixed(2);
+            document.getElementById('afterExpenses').textContent = '$' + afterExpenses.toFixed(2);
+
+            // Show results
+            results.classList.add('active');
+        }
+
+        function resetCalculator() {
+            document.getElementById('payrollForm').reset();
+            document.getElementById('taxRate').value = '20';
+            document.getElementById('monthlyExpenses').value = '0';
+            results.classList.remove('active');
+            document.querySelectorAll('.error').forEach(error => error.classList.remove('active'));
+        }
+
+        // Allow Enter key to submit from any input field
+        document.querySelectorAll('input').forEach(input => {
+            input.addEventListener('keypress', function(e) {
+                if (e.key === 'Enter') {
+                    e.preventDefault();
+                    calculatePayroll();
+                }
+            });
+        });
+    </script>
+</body>
+</html>
