@@ -1,7 +1,18 @@
-// script.js - Implements the interactive income and expense calculator logic
+// script.js - Enhanced interactive logic with theming, persistence, and PWA support
 
-// State top marginal income tax rates (percent) for 2025.  Values taken from the
-// Rich States, Poor States report on top marginal personal income tax rates【754966972375037†L208-L408】.
+const STORAGE_KEY = 'payrollCalcState';
+const COOKIE_KEY = 'payrollCalcCookie';
+const CUSTOM_CONTAINERS = [
+    'housingExtras',
+    'utilitiesExtras',
+    'vehicleExtras',
+    'publicTransportExtras',
+    'rideShareExtras',
+    'miscTravelExtras',
+    'additionalExpenses'
+];
+
+// State top marginal income tax rates (percent) for 2025.
 const stateTaxRates = {
     "Alabama": 4.15,
     "Alaska": 0.00,
@@ -55,8 +66,7 @@ const stateTaxRates = {
     "Wyoming": 0.00
 };
 
-// Federal tax brackets (2025) for different filing statuses.  Thresholds are the upper
-// bounds for each bracket. Rates correspond to the marginal tax rates【94520862381921†L244-L250】.
+// Federal tax brackets (2025) for different filing statuses.
 const federalBrackets = {
     single: {
         thresholds: [11925, 48475, 103350, 197300, 250525, 626350],
@@ -72,24 +82,24 @@ const federalBrackets = {
     }
 };
 
-// Standard deductions for 2025【94520862381921†L285-L287】.
+// Standard deductions for 2025.
 const standardDeduction = {
     single: 15000,
     married: 30000,
     head: 22500
 };
 
-// Social Security wage base and tax rates【477192643144897†L323-L369】.
+// Social Security wage base and tax rates.
 const SOCIAL_SECURITY_BASE = 176100;
 const SOCIAL_SECURITY_RATE = 0.062;
 const MEDICARE_RATE = 0.0145;
 
-/**
- * Populate the state drop‑down with U.S. states.
- */
+let saveTimer = null;
+
 function populateStates() {
     const select = document.getElementById('stateSelect');
-    // Sort states alphabetically for usability
+    if (!select) return;
+    select.innerHTML = '';
     const states = Object.keys(stateTaxRates).sort();
     states.forEach(state => {
         const option = document.createElement('option');
@@ -99,12 +109,47 @@ function populateStates() {
     });
 }
 
-/**
- * Calculate federal tax using marginal brackets.
- * @param {number} taxableIncome Amount of income subject to tax after deductions.
- * @param {string} status Filing status (single, married, head).
- * @returns {number} Federal tax owed.
- */
+function parseNumber(value) {
+    if (value === null || value === undefined) return 0;
+    const cleaned = String(value).replace(/,/g, '').replace(/[^\d.-]/g, '');
+    const num = parseFloat(cleaned);
+    return isFinite(num) ? num : 0;
+}
+
+function getInputNumber(id) {
+    const el = document.getElementById(id);
+    if (!el) return 0;
+    return parseNumber(el.value);
+}
+
+function formatWithCommas(num, decimals = 2) {
+    if (!isFinite(num)) num = 0;
+    return Number(num).toLocaleString('en-US', {
+        minimumFractionDigits: decimals,
+        maximumFractionDigits: decimals
+    });
+}
+
+function formatCurrency(num) {
+    return '$' + formatWithCommas(num, 2);
+}
+
+function formatPercent(value) {
+    if (!isFinite(value)) return '0%';
+    return `${(value * 100).toFixed(1)}%`;
+}
+
+function formatInputValue(input) {
+    if (!input) return;
+    const decimals = input.dataset.format === 'number' ? 2 : 2;
+    const numericValue = parseNumber(input.value);
+    input.value = numericValue === 0 && input.value.trim() === '' ? '' : formatWithCommas(numericValue, decimals);
+}
+
+function formatAllInputs() {
+    document.querySelectorAll('[data-format]').forEach(input => formatInputValue(input));
+}
+
 function calculateFederalTax(taxableIncome, status) {
     if (taxableIncome <= 0) return 0;
     const { thresholds, rates } = federalBrackets[status];
@@ -124,41 +169,30 @@ function calculateFederalTax(taxableIncome, status) {
     return tax;
 }
 
-/**
- * Compute gross and net income across different pay periods.
- * @returns {Object} Object containing annual, monthly, biWeekly, weekly, and hourly amounts for gross and net.
- */
 function calculateIncome() {
     const salaryRadio = document.getElementById('salaryRadio');
     let annualSalary = 0;
     let totalHours = 0;
 
-    if (salaryRadio.checked) {
-        const annualInput = parseFloat(document.getElementById('annualSalary').value);
-        annualSalary = isNaN(annualInput) ? 0 : annualInput;
-        // Assume standard 40 hour week if salary; still compute hourly breakdown
+    if (salaryRadio && salaryRadio.checked) {
+        const annualInput = getInputNumber('annualSalary');
+        annualSalary = annualInput;
         const defaultHoursPerWeek = 40;
         totalHours = defaultHoursPerWeek * 52;
     } else {
-        // Hourly
-        const wage = parseFloat(document.getElementById('hourlyWage').value);
-        const hours = parseFloat(document.getElementById('hoursPerWeek').value);
-        const overtime = parseFloat(document.getElementById('overtimeHours').value);
-        const multiplier = parseFloat(document.getElementById('overtimeMultiplier').value);
-        const hourly = isNaN(wage) ? 0 : wage;
-        const baseHours = isNaN(hours) ? 0 : hours;
-        const overtimeHours = isNaN(overtime) ? 0 : overtime;
-        const overtimeMultiplier = isNaN(multiplier) ? 1.5 : multiplier;
-        // Total weekly hours
-        totalHours = (baseHours + overtimeHours * overtimeMultiplier) * 52;
-        // Compute annual salary including overtime
-        annualSalary = (hourly * baseHours * 52) + (hourly * overtimeMultiplier * overtimeHours * 52);
+        const wage = getInputNumber('hourlyWage');
+        const hours = getInputNumber('hoursPerWeek');
+        const overtime = getInputNumber('overtimeHours');
+        const multiplier = getInputNumber('overtimeMultiplier') || 1.5;
+        const baseHours = hours > 0 ? hours : 0;
+        const overtimeHours = overtime > 0 ? overtime : 0;
+        totalHours = (baseHours + overtimeHours * multiplier) * 52;
+        annualSalary = (wage * baseHours * 52) + (wage * multiplier * overtimeHours * 52);
     }
 
-    const state = document.getElementById('stateSelect').value;
-    const status = document.getElementById('filingStatus').value;
+    const state = document.getElementById('stateSelect')?.value;
+    const status = document.getElementById('filingStatus')?.value || 'single';
 
-    // Calculate taxes
     const stdDed = standardDeduction[status] || 0;
     const taxableIncome = Math.max(0, annualSalary - stdDed);
     const federalTax = calculateFederalTax(taxableIncome, status);
@@ -166,17 +200,15 @@ function calculateIncome() {
     const medicareTax = annualSalary * MEDICARE_RATE;
     const stateRate = stateTaxRates[state] || 0;
     const stateTax = annualSalary * (stateRate / 100);
-    let totalTax = federalTax + socialSecurityTax + medicareTax + stateTax;
+    const totalTax = federalTax + socialSecurityTax + medicareTax + stateTax;
     let netAnnual = annualSalary - totalTax;
     if (netAnnual < 0) netAnnual = 0;
 
-    // Compute gross amounts
     const grossMonthly = annualSalary / 12;
     const grossBiWeekly = annualSalary / 26;
     const grossWeekly = annualSalary / 52;
     const grossHourly = totalHours > 0 ? annualSalary / totalHours : 0;
 
-    // Compute net amounts
     const netMonthly = netAnnual / 12;
     const netBiWeekly = netAnnual / 26;
     const netWeekly = netAnnual / 52;
@@ -192,98 +224,198 @@ function calculateIncome() {
         netMonthly,
         netBiWeekly,
         netWeekly,
-        netHourly
+        netHourly,
+        taxes: {
+            federalTax,
+            stateTax,
+            socialSecurityTax,
+            medicareTax,
+            totalTax
+        },
+        effectiveTaxRate: annualSalary > 0 ? totalTax / annualSalary : 0
     };
 }
 
-/**
- * Sum all monthly living expenses from the input fields and custom items.
- * @returns {number} The total monthly expenses.
- */
-function calculateExpenses() {
-    let total = 0;
-    // Housing
-    const housingAmount = parseFloat(document.getElementById('housingAmount').value);
-    if (!isNaN(housingAmount)) total += housingAmount;
-    const housingType = document.getElementById('housingType').value;
-    if (housingType === 'mortgage') {
-        const propertyTax = parseFloat(document.getElementById('propertyTax').value);
-        if (!isNaN(propertyTax)) total += propertyTax;
-    }
-    total += sumCustomItems('housingExtras');
-
-    // Utilities
-    const utilBase = parseFloat(document.getElementById('utilitiesBase').value);
-    if (!isNaN(utilBase)) total += utilBase;
-    total += sumCustomItems('utilitiesExtras');
-
-    // Travel - Vehicle
-    if (document.getElementById('vehicleCheckbox').checked) {
-        const vehiclePayment = parseFloat(document.getElementById('vehiclePayment').value);
-        if (!isNaN(vehiclePayment)) total += vehiclePayment;
-        const insuranceAmount = parseFloat(document.getElementById('autoInsuranceAmount').value);
-        const period = parseFloat(document.getElementById('autoInsurancePeriod').value);
-        if (!isNaN(insuranceAmount) && !isNaN(period) && period > 0) {
-            total += insuranceAmount / period;
-        }
-        total += sumCustomItems('vehicleExtras');
-    }
-    // Travel - Public transport
-    if (document.getElementById('publicTransportCheckbox').checked) {
-        total += sumCustomItems('publicTransportExtras');
-    }
-    // Travel - Ride share
-    if (document.getElementById('rideShareCheckbox').checked) {
-        total += sumCustomItems('rideShareExtras');
-    }
-    // Travel - Miscellaneous
-    if (document.getElementById('miscTravelCheckbox').checked) {
-        total += sumCustomItems('miscTravelExtras');
-    }
-    // Food & groceries
-    const food = parseFloat(document.getElementById('foodExpenses').value);
-    if (!isNaN(food)) total += food;
-    // Additional expenses
-    total += sumCustomItems('additionalExpenses');
-    return total;
-}
-
-/**
- * Sum numeric values of custom item rows within a container.
- * @param {string} containerId The id of the container holding custom rows.
- * @returns {number} Sum of values.
- */
 function sumCustomItems(containerId) {
     const container = document.getElementById(containerId);
     let sum = 0;
     if (!container) return 0;
     const rows = container.querySelectorAll('.custom-item-row');
     rows.forEach(row => {
-        const numInput = row.querySelector('input[type="number"]');
-        const val = parseFloat(numInput.value);
+        const numInput = row.querySelector('input[data-format]');
+        const val = parseNumber(numInput?.value);
         if (!isNaN(val)) sum += val;
     });
     return sum;
 }
 
-/**
- * Add a custom expense item row to the specified container.
- * Each row consists of a text input (label), a numeric input (value), and a remove button.
- * @param {string} containerId The id of the container where the row should be added.
- */
-function addCustomItem(containerId) {
+function calculateExpenses() {
+    const housingAmount = getInputNumber('housingAmount');
+    const housingType = document.getElementById('housingType')?.value;
+    const propertyTax = housingType === 'mortgage' ? getInputNumber('propertyTax') : 0;
+    const housingExtras = sumCustomItems('housingExtras');
+    const housingTotal = housingAmount + propertyTax + housingExtras;
+
+    const utilBase = getInputNumber('utilitiesBase');
+    const utilitiesTotal = utilBase + sumCustomItems('utilitiesExtras');
+
+    let vehicleTotal = 0;
+    if (document.getElementById('vehicleCheckbox')?.checked) {
+        const vehiclePayment = getInputNumber('vehiclePayment');
+        const fuelCosts = getInputNumber('fuelCosts');
+        const insuranceAmount = getInputNumber('autoInsuranceAmount');
+        const period = parseNumber(document.getElementById('autoInsurancePeriod')?.value) || 1;
+        const insuranceMonthly = period > 0 ? insuranceAmount / period : 0;
+        vehicleTotal = vehiclePayment + fuelCosts + insuranceMonthly + sumCustomItems('vehicleExtras');
+    }
+
+    const publicTotal = document.getElementById('publicTransportCheckbox')?.checked ? sumCustomItems('publicTransportExtras') : 0;
+    const rideShareTotal = document.getElementById('rideShareCheckbox')?.checked ? sumCustomItems('rideShareExtras') : 0;
+    const miscTravelTotal = document.getElementById('miscTravelCheckbox')?.checked ? sumCustomItems('miscTravelExtras') : 0;
+
+    const travelTotal = vehicleTotal + publicTotal + rideShareTotal + miscTravelTotal;
+
+    const foodTotal = getInputNumber('foodExpenses');
+    const additionalTotal = sumCustomItems('additionalExpenses');
+
+    const total = housingTotal + utilitiesTotal + travelTotal + foodTotal + additionalTotal;
+
+    return {
+        housingTotal,
+        utilitiesTotal,
+        vehicleTotal,
+        publicTotal,
+        rideShareTotal,
+        miscTravelTotal,
+        travelTotal,
+        foodTotal,
+        additionalTotal,
+        total
+    };
+}
+
+function updateExpenseUI(expenses) {
+    const setText = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = formatCurrency(value);
+    };
+    setText('housingTotal', expenses.housingTotal);
+    setText('utilitiesTotal', expenses.utilitiesTotal);
+    setText('vehicleTotal', expenses.vehicleTotal);
+    setText('publicTransportTotal', expenses.publicTotal);
+    setText('rideShareTotal', expenses.rideShareTotal);
+    setText('miscTravelTotal', expenses.miscTravelTotal);
+    setText('travelTotal', expenses.travelTotal);
+    setText('foodTotal', expenses.foodTotal);
+    setText('additionalTotal', expenses.additionalTotal);
+    setText('totalExpenses', expenses.total);
+}
+
+function updateIncomeUI(income) {
+    const { taxes } = income;
+    const quickSet = (id, value) => {
+        const el = document.getElementById(id);
+        if (el) el.textContent = value;
+    };
+    quickSet('grossAnnual', formatCurrency(income.grossAnnual));
+    quickSet('grossMonthly', formatCurrency(income.grossMonthly));
+    quickSet('grossBiWeekly', formatCurrency(income.grossBiWeekly));
+    quickSet('grossWeekly', formatCurrency(income.grossWeekly));
+    quickSet('grossHourly', formatCurrency(income.grossHourly));
+
+    quickSet('netAnnual', formatCurrency(income.netAnnual));
+    quickSet('netMonthly', formatCurrency(income.netMonthly));
+    quickSet('netMonthlyRow', formatCurrency(income.netMonthly));
+    quickSet('netBiWeekly', formatCurrency(income.netBiWeekly));
+    quickSet('netWeekly', formatCurrency(income.netWeekly));
+    quickSet('netHourly', formatCurrency(income.netHourly));
+
+    quickSet('effectiveTaxRate', `Effective tax: ${formatPercent(income.effectiveTaxRate)}`);
+    quickSet('federalTaxAmount', formatCurrency(taxes.federalTax));
+    quickSet('stateTaxAmount', formatCurrency(taxes.stateTax));
+    quickSet('socialSecurityTaxAmount', formatCurrency(taxes.socialSecurityTax));
+    quickSet('medicareTaxAmount', formatCurrency(taxes.medicareTax));
+    quickSet('totalTaxAmount', formatCurrency(taxes.totalTax));
+
+    quickSet('calcGrossAnnual', formatCurrency(income.grossAnnual));
+    quickSet('calcTotalTax', formatCurrency(taxes.totalTax));
+    quickSet('calcNetAnnual', formatCurrency(income.netAnnual));
+    quickSet('calcNetMonthly', formatCurrency(income.netMonthly));
+}
+
+function recalculate() {
+    const income = calculateIncome();
+    const expenses = calculateExpenses();
+
+    updateIncomeUI(income);
+    updateExpenseUI(expenses);
+
+    const remaining = income.netMonthly - expenses.total;
+    const remainingEl = document.getElementById('remainingIncome');
+    if (remainingEl) remainingEl.textContent = formatCurrency(remaining);
+
+    const calcExpensesEl = document.getElementById('calcExpenses');
+    const calcLeftoverEl = document.getElementById('calcLeftover');
+    if (calcExpensesEl) calcExpensesEl.textContent = formatCurrency(expenses.total);
+    if (calcLeftoverEl) calcLeftoverEl.textContent = formatCurrency(remaining);
+
+    queueSave();
+}
+
+function toggleIncomeInputs() {
+    const salaryInputs = document.getElementById('salaryInputs');
+    const hourlyInputs = document.getElementById('hourlyInputs');
+    if (document.getElementById('salaryRadio')?.checked) {
+        salaryInputs?.classList.remove('hidden');
+        hourlyInputs?.classList.add('hidden');
+    } else {
+        salaryInputs?.classList.add('hidden');
+        hourlyInputs?.classList.remove('hidden');
+    }
+    recalculate();
+}
+
+function togglePropertyTax() {
+    const housingType = document.getElementById('housingType')?.value;
+    const propertyLabel = document.getElementById('propertyTaxLabel');
+    if (housingType === 'mortgage') {
+        propertyLabel?.classList.remove('hidden');
+    } else {
+        propertyLabel?.classList.add('hidden');
+    }
+    recalculate();
+}
+
+function toggleTravelSections() {
+    const toggle = (id, checkboxId) => {
+        const section = document.getElementById(id);
+        const checked = document.getElementById(checkboxId)?.checked;
+        section?.classList.toggle('hidden', !checked);
+    };
+    toggle('vehicleSection', 'vehicleCheckbox');
+    toggle('publicTransportSection', 'publicTransportCheckbox');
+    toggle('rideShareSection', 'rideShareCheckbox');
+    toggle('miscTravelSection', 'miscTravelCheckbox');
+    recalculate();
+}
+
+function addCustomItem(containerId, data = { label: '', value: '0' }) {
     const container = document.getElementById(containerId);
     if (!container) return;
     const row = document.createElement('div');
     row.className = 'custom-item-row';
+
     const labelInput = document.createElement('input');
     labelInput.type = 'text';
     labelInput.placeholder = 'Item label';
+    labelInput.value = data.label || '';
+
     const valueInput = document.createElement('input');
-    valueInput.type = 'number';
-    valueInput.min = '0';
-    valueInput.step = '0.01';
-    valueInput.value = '0';
+    valueInput.type = 'text';
+    valueInput.inputMode = 'decimal';
+    valueInput.dataset.format = 'currency';
+    valueInput.value = data.value || '0';
+
     const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.textContent = 'Remove';
@@ -291,126 +423,185 @@ function addCustomItem(containerId) {
         container.removeChild(row);
         recalculate();
     });
-    // Recalculate when values change
-    labelInput.addEventListener('input', recalculate);
+
+    labelInput.addEventListener('input', () => {
+        queueSave();
+    });
+
     valueInput.addEventListener('input', recalculate);
+    valueInput.addEventListener('blur', () => {
+        formatInputValue(valueInput);
+        recalculate();
+    });
+
     row.appendChild(labelInput);
     row.appendChild(valueInput);
     row.appendChild(removeBtn);
     container.appendChild(row);
+    formatInputValue(valueInput);
     recalculate();
 }
 
-/**
- * Recalculate incomes, expenses, and update the DOM accordingly.
- */
-function recalculate() {
-    const income = calculateIncome();
-    // Update income table
-    document.getElementById('grossAnnual').textContent  = formatCurrency(income.grossAnnual);
-    document.getElementById('grossMonthly').textContent = formatCurrency(income.grossMonthly);
-    document.getElementById('grossBiWeekly').textContent= formatCurrency(income.grossBiWeekly);
-    document.getElementById('grossWeekly').textContent  = formatCurrency(income.grossWeekly);
-    document.getElementById('grossHourly').textContent  = formatCurrency(income.grossHourly);
-    document.getElementById('netAnnual').textContent    = formatCurrency(income.netAnnual);
-    document.getElementById('netMonthly').textContent   = formatCurrency(income.netMonthly);
-    document.getElementById('netBiWeekly').textContent  = formatCurrency(income.netBiWeekly);
-    document.getElementById('netWeekly').textContent    = formatCurrency(income.netWeekly);
-    document.getElementById('netHourly').textContent    = formatCurrency(income.netHourly);
-    // Calculate expenses and remaining income
-    const expenses = calculateExpenses();
-    document.getElementById('totalExpenses').textContent = formatCurrency(expenses);
-    const remaining = income.netMonthly - expenses;
-    document.getElementById('remainingIncome').textContent = formatCurrency(remaining);
+function readCustomRows(containerId) {
+    const container = document.getElementById(containerId);
+    if (!container) return [];
+    return Array.from(container.querySelectorAll('.custom-item-row')).map(row => {
+        const inputs = row.querySelectorAll('input');
+        return {
+            label: inputs[0]?.value || '',
+            value: inputs[1]?.value || '0'
+        };
+    });
 }
 
-/**
- * Format a number as currency with two decimal places.
- * @param {number} num The number to format.
- * @returns {string} Formatted currency string.
- */
-function formatCurrency(num) {
-    if (!isFinite(num)) return '$0.00';
-    return '$' + num.toFixed(2);
+function restoreCustomItems(state) {
+    CUSTOM_CONTAINERS.forEach(containerId => {
+        const items = state?.custom?.[containerId] || [];
+        const container = document.getElementById(containerId);
+        if (container) container.innerHTML = '';
+        items.forEach(item => addCustomItem(containerId, item));
+    });
 }
 
-/**
- * Show or hide input groups based on selected income type.
- */
-function toggleIncomeInputs() {
-    const salaryInputs = document.getElementById('salaryInputs');
-    const hourlyInputs = document.getElementById('hourlyInputs');
-    if (document.getElementById('salaryRadio').checked) {
-        salaryInputs.classList.remove('hidden');
-        hourlyInputs.classList.add('hidden');
-    } else {
-        salaryInputs.classList.add('hidden');
-        hourlyInputs.classList.remove('hidden');
-    }
-    recalculate();
+function setTheme(mode) {
+    const body = document.body;
+    const toLight = mode === 'light';
+    body.classList.toggle('theme-light', toLight);
+    body.classList.toggle('theme-dark', !toLight);
+    const toggleBtn = document.getElementById('themeToggle');
+    if (toggleBtn) toggleBtn.textContent = toLight ? 'Switch to Dark' : 'Switch to Light';
+    const metaTheme = document.querySelector('meta[name="theme-color"]');
+    if (metaTheme) metaTheme.setAttribute('content', toLight ? '#ffffff' : '#0f1724');
+    queueSave();
 }
 
-/**
- * Toggle visibility of property tax input based on housing type selection.
- */
-function togglePropertyTax() {
-    const housingType = document.getElementById('housingType').value;
-    const propertyLabel = document.getElementById('propertyTaxLabel');
-    const propertyInput = document.getElementById('propertyTax');
-    if (housingType === 'mortgage') {
-        propertyLabel.classList.remove('hidden');
-        propertyInput.classList.remove('hidden');
-    } else {
-        propertyLabel.classList.add('hidden');
-        propertyInput.classList.add('hidden');
-    }
-    recalculate();
+function loadTheme(state) {
+    const theme = state?.theme || 'dark';
+    setTheme(theme);
 }
 
-/**
- * Toggle travel sections when checkboxes are selected/deselected.
- */
-function toggleTravelSections() {
-    const vehicleSection = document.getElementById('vehicleSection');
-    const publicSection  = document.getElementById('publicTransportSection');
-    const rideSection    = document.getElementById('rideShareSection');
-    const miscSection    = document.getElementById('miscTravelSection');
-    vehicleSection.classList.toggle('hidden', !document.getElementById('vehicleCheckbox').checked);
-    publicSection.classList.toggle('hidden', !document.getElementById('publicTransportCheckbox').checked);
-    rideSection.classList.toggle('hidden', !document.getElementById('rideShareCheckbox').checked);
-    miscSection.classList.toggle('hidden', !document.getElementById('miscTravelCheckbox').checked);
-    recalculate();
+function updateAutosaveStatus(message = 'Auto-saved') {
+    const el = document.getElementById('autosaveStatus');
+    if (el) el.textContent = message;
 }
 
-// Set up the page once the DOM is ready
-document.addEventListener('DOMContentLoaded', () => {
-    populateStates();
-    // Set event listeners for income type radios
-    document.getElementById('salaryRadio').addEventListener('change', toggleIncomeInputs);
-    document.getElementById('hourlyRadio').addEventListener('change', toggleIncomeInputs);
-    // Housing type change
-    document.getElementById('housingType').addEventListener('change', togglePropertyTax);
-    // Travel checkboxes
-    document.getElementById('vehicleCheckbox').addEventListener('change', toggleTravelSections);
-    document.getElementById('publicTransportCheckbox').addEventListener('change', toggleTravelSections);
-    document.getElementById('rideShareCheckbox').addEventListener('change', toggleTravelSections);
-    document.getElementById('miscTravelCheckbox').addEventListener('change', toggleTravelSections);
-    // Attach recalculate listeners to all inputs and selects
+function saveState() {
+    const state = {
+        theme: document.body.classList.contains('theme-light') ? 'light' : 'dark',
+        inputs: {},
+        custom: {}
+    };
     document.querySelectorAll('input, select').forEach(el => {
-        if (el.type !== 'radio' && el.type !== 'button' && el.type !== 'checkbox') {
-            el.addEventListener('input', recalculate);
-        }
-        if (el.tagName.toLowerCase() === 'select' && el.id !== 'autoInsurancePeriod') {
-            // For selects (except insurance period which is handled via input event)
-            el.addEventListener('change', recalculate);
+        if (!el.id) return;
+        if (el.type === 'checkbox' || el.type === 'radio') {
+            state.inputs[el.id] = el.checked;
+        } else {
+            state.inputs[el.id] = el.value;
         }
     });
-    // Insurance period also triggers recalc
-    document.getElementById('autoInsurancePeriod').addEventListener('change', recalculate);
-    // Checkboxes recalc is handled in toggleTravelSections which calls recalculate.
-    // Initial display
+    CUSTOM_CONTAINERS.forEach(id => {
+        state.custom[id] = readCustomRows(id);
+    });
+    const serialized = JSON.stringify(state);
+    localStorage.setItem(STORAGE_KEY, serialized);
+    document.cookie = `${COOKIE_KEY}=${btoa(serialized)}; max-age=34128000; path=/`;
+    updateAutosaveStatus('Auto-saved');
+}
+
+function loadState() {
+    let stateData = null;
+    const stored = localStorage.getItem(STORAGE_KEY);
+    if (stored) {
+        try {
+            stateData = JSON.parse(stored);
+        } catch (e) {
+            stateData = null;
+        }
+    }
+    if (!stateData) {
+        const cookie = document.cookie.split('; ').find(row => row.startsWith(`${COOKIE_KEY}=`));
+        if (cookie) {
+            try {
+                stateData = JSON.parse(atob(cookie.split('=')[1]));
+            } catch (e) {
+                stateData = null;
+            }
+        }
+    }
+    if (!stateData) return;
+
+    Object.entries(stateData.inputs || {}).forEach(([id, value]) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        if (el.type === 'checkbox' || el.type === 'radio') {
+            el.checked = !!value;
+        } else {
+            el.value = value;
+        }
+    });
+    restoreCustomItems(stateData);
+    loadTheme(stateData);
+    formatAllInputs();
     toggleIncomeInputs();
     togglePropertyTax();
     toggleTravelSections();
     recalculate();
+}
+
+function queueSave() {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(saveState, 250);
+    updateAutosaveStatus('Saving…');
+}
+
+function clearSavedState() {
+    localStorage.removeItem(STORAGE_KEY);
+    document.cookie = `${COOKIE_KEY}=; max-age=0; path=/`;
+    window.location.reload();
+}
+
+function wireInputs() {
+    document.getElementById('salaryRadio')?.addEventListener('change', toggleIncomeInputs);
+    document.getElementById('hourlyRadio')?.addEventListener('change', toggleIncomeInputs);
+    document.getElementById('housingType')?.addEventListener('change', togglePropertyTax);
+    document.getElementById('vehicleCheckbox')?.addEventListener('change', toggleTravelSections);
+    document.getElementById('publicTransportCheckbox')?.addEventListener('change', toggleTravelSections);
+    document.getElementById('rideShareCheckbox')?.addEventListener('change', toggleTravelSections);
+    document.getElementById('miscTravelCheckbox')?.addEventListener('change', toggleTravelSections);
+    document.getElementById('autoInsurancePeriod')?.addEventListener('change', recalculate);
+    document.getElementById('clearData')?.addEventListener('click', clearSavedState);
+    document.getElementById('themeToggle')?.addEventListener('click', () => {
+        const nextTheme = document.body.classList.contains('theme-light') ? 'dark' : 'light';
+        setTheme(nextTheme);
+    });
+
+    document.querySelectorAll('input[data-format], select').forEach(el => {
+        if (el.tagName.toLowerCase() === 'select') {
+            el.addEventListener('change', recalculate);
+            return;
+        }
+        el.addEventListener('input', recalculate);
+        el.addEventListener('blur', () => {
+            formatInputValue(el);
+            recalculate();
+        });
+    });
+}
+
+function registerServiceWorker() {
+    if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.register('sw.js').catch(() => {});
+    }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+    populateStates();
+    wireInputs();
+    formatAllInputs();
+    toggleIncomeInputs();
+    togglePropertyTax();
+    toggleTravelSections();
+    loadState();
+    recalculate();
+    registerServiceWorker();
 });
