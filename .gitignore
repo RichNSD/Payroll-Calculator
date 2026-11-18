@@ -1,2 +1,5 @@
 # For when the editor tests the page
 localStorage.json
+
+# Node
+node_modules/

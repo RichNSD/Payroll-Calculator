@@ -1,0 +1,39 @@
+{
+  "year": 2026,
+  "lastReviewed": "2026-11-18",
+  "sources": [
+    "IRS Rev. Proc. 2025-32 (2026 inflation adjustments, incl. One Big Beautiful Bill Act amendments)",
+    "SSA 2026 COLA fact sheet (Social Security wage base $184,500)"
+  ],
+  "incomeTax": {
+    "brackets": {
+      "single": [[0, 0.10], [12400, 0.12], [50400, 0.22], [105700, 0.24], [201775, 0.32], [256225, 0.35], [640600, 0.37]],
+      "married": [[0, 0.10], [24800, 0.12], [100800, 0.22], [211400, 0.24], [403550, 0.32], [512450, 0.35], [768700, 0.37]],
+      "head": [[0, 0.10], [17700, 0.12], [67450, 0.22], [105700, 0.24], [201750, 0.32], [256200, 0.35], [640600, 0.37]],
+      "separate": [[0, 0.10], [12400, 0.12], [50400, 0.22], [105700, 0.24], [201775, 0.32], [256225, 0.35], [384350, 0.37]]
+    },
+    "standardDeduction": { "single": 16100, "married": 32200, "head": 24150, "separate": 16100 }
+  },
+  "childTaxCredit": {
+    "perChild": 2200,
+    "refundablePerChild": 1700,
+    "refundableEarnedIncomeFloor": 2500,
+    "refundableRate": 0.15,
+    "phaseoutStart": { "single": 200000, "married": 400000, "head": 200000, "separate": 200000 },
+    "phaseoutPerThousand": 50
+  },
+  "overtimeDeduction": {
+    "note": "OBBBA 'no tax on overtime' deduction (2025-2028) for the FLSA overtime premium (the 'half' in time-and-a-half). Not available to married filing separately.",
+    "max": { "single": 12500, "married": 25000, "head": 12500, "separate": 0 },
+    "phaseoutStart": { "single": 150000, "married": 300000, "head": 150000, "separate": 150000 },
+    "phaseoutPerThousand": 100
+  },
+  "fica": {
+    "socialSecurity": { "rate": 0.062, "wageBase": 184500 },
+    "medicare": { "rate": 0.0145 },
+    "additionalMedicare": {
+      "rate": 0.009,
+      "threshold": { "single": 200000, "married": 250000, "head": 200000, "separate": 125000 }
+    }
+  }
+}

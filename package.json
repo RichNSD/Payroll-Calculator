@@ -1,0 +1,12 @@
+{
+  "name": "payroll-calculator",
+  "version": "2.0.0",
+  "private": true,
+  "description": "A simple, dynamic calculator for your payroll and monthly expenses.",
+  "type": "module",
+  "scripts": {
+    "start": "python3 -m http.server 8080",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "license": "MIT"
+}

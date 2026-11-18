@@ -3,42 +3,65 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Dynamic Income & Expense Calculator</title>
+    <title>Income &amp; Expense Estimator</title>
+    <meta name="description" content="Estimate take-home pay with 2026 federal and state taxes, then budget your monthly expenses.">
     <meta name="theme-color" content="#0f1724">
+    <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" type="image/png" href="./assets/icon-192.png">
     <link rel="apple-touch-icon" href="./assets/icon-192.png">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&display=swap">
     <link rel="stylesheet" href="./styles/main.css">
+    <script>
+        // Apply the saved (or system) theme before first paint to avoid a flash.
+        (function () {
+            var theme = null;
+            try { theme = localStorage.getItem('payrollCalcTheme'); } catch (e) {}
+            if (theme !== 'light' && theme !== 'dark') {
+                theme = window.matchMedia && window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark';
+            }
+            document.documentElement.dataset.theme = theme;
+        })();
+    </script>
+    <script type="module" src="./src/app.js"></script>
 </head>
-<body class="theme-dark">
+<body>
     <div class="app-shell">
         <header class="top-bar">
             <div class="brand">
-                <div class="brand-mark"></div>
+                <div class="brand-mark" aria-hidden="true"></div>
                 <div>
                     <p class="eyebrow">Smart budgeting</p>
                     <h1>Income &amp; Expense Estimator</h1>
                 </div>
             </div>
             <div class="top-actions">
-                <button id="themeToggle" class="ghost-btn" type="button">Switch to Light</button>
+                <button id="themeToggle" class="ghost-btn" type="button">Switch to light</button>
                 <button id="clearData" class="ghost-btn secondary" type="button">Reset data</button>
             </div>
         </header>
 
-        <p class="lede">Plan paychecks, deductions, and bills in one view. Your numbers auto-save to this device and are ready offline via the installed PWA.</p>
+        <p class="lede">Plan paychecks, deductions, and bills in one view. Your numbers auto-save to this device and work offline once the app is installed.</p>
+
+        <div id="loadError" class="alert hidden" role="alert"></div>
 
         <main class="layout-grid">
-            <section id="income-section" class="panel">
-                <div class="panel-head">
+            <!-- ============================== Income inputs ============================== -->
+            <section id="income-section" class="panel" aria-labelledby="income-heading">
+                <div class="panel-head row">
                     <div>
                         <p class="eyebrow">Income inputs</p>
-                        <h2>How do you get paid?</h2>
+                        <h2 id="income-heading">How do you get paid?</h2>
                     </div>
-                    <div class="pill pill-soft" id="autosaveStatus">Auto-saved</div>
+                    <div class="pill pill-soft" id="autosaveStatus" role="status" aria-live="polite">Auto-saved</div>
                 </div>
-                <div class="option-row">
+
+                <fieldset class="option-row">
+                    <legend class="visually-hidden">Pay type</legend>
                     <label class="pill-select">
                         <input type="radio" name="incomeType" value="salary" id="salaryRadio" checked>
                         <span>Annual salary</span>
@@ -47,7 +70,7 @@
                         <input type="radio" name="incomeType" value="hourly" id="hourlyRadio">
                         <span>Hourly wage</span>
                     </label>
-                </div>
+                </fieldset>
 
                 <div id="salaryInputs" class="inputs-group">
                     <label class="field">
@@ -63,7 +86,7 @@
                             <input type="text" id="hourlyWage" inputmode="decimal" autocomplete="off" data-format="currency" placeholder="Hourly rate">
                         </label>
                         <label class="field">
-                            <span>Hours per week</span>
+                            <span>Regular hours per week</span>
                             <input type="text" id="hoursPerWeek" inputmode="decimal" autocomplete="off" data-format="number" value="40">
                         </label>
                         <label class="field">
@@ -79,25 +102,63 @@
 
                 <div class="field-grid dual">
                     <label class="field">
-                        <span>Select your state</span>
+                        <span>State</span>
                         <select id="stateSelect"></select>
                     </label>
                     <label class="field">
                         <span>Filing status</span>
                         <select id="filingStatus">
                             <option value="single">Single</option>
-                            <option value="married">Married Filing Jointly</option>
-                            <option value="head">Head of Household</option>
+                            <option value="married">Married filing jointly</option>
+                            <option value="separate">Married filing separately</option>
+                            <option value="head">Head of household</option>
                         </select>
                     </label>
+                    <label class="field">
+                        <span>Children under 17</span>
+                        <input type="text" id="dependents" inputmode="numeric" autocomplete="off" data-format="number" value="0">
+                    </label>
+                    <label class="field">
+                        <span>Tax year</span>
+                        <select id="taxYear"></select>
+                    </label>
                 </div>
+
+                <p class="hint field-note" id="marriedHint">Filing jointly? Enter your combined household pay.</p>
+
+                <details class="more-options" id="moreOptions">
+                    <summary>Pre-tax deductions &amp; local tax</summary>
+                    <div class="field-grid dual">
+                        <label class="field">
+                            <span>401(k) / 403(b) contributions ($/year)</span>
+                            <input type="text" id="pretaxRetirement" inputmode="decimal" autocomplete="off" data-format="currency" value="0">
+                        </label>
+                        <label class="field">
+                            <span>Health premiums / HSA / FSA ($/year)</span>
+                            <input type="text" id="pretaxHealth" inputmode="decimal" autocomplete="off" data-format="currency" value="0">
+                        </label>
+                        <label class="field">
+                            <span>Local / city income tax rate (%)</span>
+                            <input type="text" id="localTaxRate" inputmode="decimal" autocomplete="off" data-format="number" value="0">
+                        </label>
+                    </div>
+                </details>
+
+                <aside id="stateInfo" class="state-info" aria-live="polite">
+                    <div class="state-info-head">
+                        <p class="state-info-title" id="stateInfoTitle"></p>
+                        <span class="badge" id="stateConfidence"></span>
+                    </div>
+                    <ul class="state-notes" id="stateNotes"></ul>
+                </aside>
             </section>
 
-            <section id="results-section" class="panel">
+            <!-- ============================== Income results ============================== -->
+            <section id="results-section" class="panel" aria-labelledby="results-heading">
                 <div class="panel-head">
                     <p class="eyebrow">Income breakdown</p>
-                    <h2>Gross vs take-home</h2>
-                    <p class="muted-text">All values auto-convert to monthly, weekly, and hourly views.</p>
+                    <h2 id="results-heading">Gross vs take-home</h2>
+                    <p class="muted-text">Every pay period at a glance.</p>
                 </div>
                 <div class="stat-grid">
                     <div class="stat-card">
@@ -108,7 +169,7 @@
                     <div class="stat-card">
                         <p class="label">Annual net</p>
                         <p class="stat positive" id="netAnnual">$0.00</p>
-                        <p class="hint" id="effectiveTaxRate">Effective tax: 0%</p>
+                        <p class="hint" id="effectiveTaxRate">Effective tax rate: 0%</p>
                     </div>
                     <div class="stat-card">
                         <p class="label">Monthly net</p>
@@ -120,70 +181,29 @@
                     <table id="incomeTable">
                         <thead>
                             <tr>
-                                <th>Period</th>
-                                <th>Gross</th>
-                                <th>Net</th>
+                                <th scope="col">Period</th>
+                                <th scope="col">Gross</th>
+                                <th scope="col">Net</th>
                             </tr>
                         </thead>
-                        <tbody>
-                            <tr>
-                                <td>Monthly</td>
-                                <td id="grossMonthly">$0.00</td>
-                                <td id="netMonthlyRow">$0.00</td>
-                            </tr>
-                            <tr>
-                                <td>Bi-Weekly</td>
-                                <td id="grossBiWeekly">$0.00</td>
-                                <td id="netBiWeekly">$0.00</td>
-                            </tr>
-                            <tr>
-                                <td>Weekly</td>
-                                <td id="grossWeekly">$0.00</td>
-                                <td id="netWeekly">$0.00</td>
-                            </tr>
-                            <tr>
-                                <td>Hourly</td>
-                                <td id="grossHourly">$0.00</td>
-                                <td id="netHourly">$0.00</td>
-                            </tr>
-                        </tbody>
+                        <tbody id="incomeTableBody"></tbody>
                     </table>
                 </div>
 
                 <div class="panel-sub">
                     <div>
                         <p class="eyebrow">Withholding detail</p>
-                        <h3>What gets deducted</h3>
+                        <h3>What gets deducted (per year)</h3>
                     </div>
-                    <dl class="pill-list">
-                        <div class="pill-row">
-                            <dt>Federal income tax</dt>
-                            <dd id="federalTaxAmount">$0.00</dd>
-                        </div>
-                        <div class="pill-row">
-                            <dt>State income tax</dt>
-                            <dd id="stateTaxAmount">$0.00</dd>
-                        </div>
-                        <div class="pill-row">
-                            <dt>Social Security (6.2%)</dt>
-                            <dd id="socialSecurityTaxAmount">$0.00</dd>
-                        </div>
-                        <div class="pill-row">
-                            <dt>Medicare (1.45%)</dt>
-                            <dd id="medicareTaxAmount">$0.00</dd>
-                        </div>
-                        <div class="pill-row total">
-                            <dt>Total annual taxes</dt>
-                            <dd id="totalTaxAmount">$0.00</dd>
-                        </div>
-                    </dl>
+                    <dl class="pill-list" id="deductionList"></dl>
                 </div>
             </section>
 
-            <section id="expenses-section" class="panel wide">
+            <!-- ============================== Expenses ============================== -->
+            <section id="expenses-section" class="panel wide" aria-labelledby="expenses-heading">
                 <div class="panel-head">
                     <p class="eyebrow">Monthly living</p>
-                    <h2>Expense tracker</h2>
+                    <h2 id="expenses-heading">Expense tracker</h2>
                     <p class="muted-text">Itemize each category so the calculator can show where your take-home goes.</p>
                 </div>
 
@@ -208,13 +228,13 @@
                                 <span>Amount ($/month)</span>
                                 <input type="text" id="housingAmount" inputmode="decimal" autocomplete="off" data-format="currency" value="0">
                             </label>
-                            <label id="propertyTaxLabel" class="field hidden" for="propertyTax">
+                            <label id="propertyTaxLabel" class="field hidden">
                                 <span>Property tax ($/month)</span>
                                 <input type="text" id="propertyTax" inputmode="decimal" autocomplete="off" data-format="currency" value="0">
                             </label>
                         </div>
                         <div id="housingExtras" class="extras-container"></div>
-                        <button type="button" class="add-item-btn" onclick="addCustomItem('housingExtras')">Add custom item</button>
+                        <button type="button" class="add-item-btn" data-add-item="housingExtras">Add custom item</button>
                     </div>
 
                     <div class="expense-category">
@@ -228,11 +248,11 @@
                         <div class="list">
                             <label class="field">
                                 <span>Bundled utilities ($/month)</span>
-                                <input type="text" id="utilitiesBase" inputmode="decimal" autocomplete="off" data-format="currency" value="0" title="Enter base utilities costs. Add specific items below.">
+                                <input type="text" id="utilitiesBase" inputmode="decimal" autocomplete="off" data-format="currency" value="0">
                             </label>
                         </div>
                         <div id="utilitiesExtras" class="extras-container"></div>
-                        <button type="button" class="add-item-btn" onclick="addCustomItem('utilitiesExtras')">Add custom item</button>
+                        <button type="button" class="add-item-btn" data-add-item="utilitiesExtras">Add custom item</button>
                     </div>
 
                     <div class="expense-category">
@@ -244,29 +264,32 @@
                             <p class="category-total" id="travelTotal">$0.00</p>
                         </div>
                         <div class="checkbox-group">
-                            <label><input type="checkbox" id="vehicleCheckbox"> Owned/Leased Vehicle</label>
-                            <label><input type="checkbox" id="publicTransportCheckbox"> Public transportation</label>
-                            <label><input type="checkbox" id="rideShareCheckbox"> Taxi/Uber/Ride Share</label>
-                            <label><input type="checkbox" id="miscTravelCheckbox"> Miscellaneous travel</label>
+                            <label><input type="checkbox" id="vehicleCheckbox" data-toggles="vehicleSection"> Owned/leased vehicle</label>
+                            <label><input type="checkbox" id="publicTransportCheckbox" data-toggles="publicTransportSection"> Public transportation</label>
+                            <label><input type="checkbox" id="rideShareCheckbox" data-toggles="rideShareSection"> Taxi/ride share</label>
+                            <label><input type="checkbox" id="miscTravelCheckbox" data-toggles="miscTravelSection"> Miscellaneous travel</label>
                         </div>
 
                         <div id="vehicleSection" class="travel-section hidden">
-                            <h4>Vehicle Expenses</h4>
+                            <div class="travel-head">
+                                <h4>Vehicle expenses</h4>
+                                <p class="category-total sub" id="vehicleTotal">$0.00</p>
+                            </div>
                             <div class="field-grid dual">
                                 <label class="field">
                                     <span>Monthly payment ($)</span>
                                     <input type="text" id="vehiclePayment" inputmode="decimal" autocomplete="off" data-format="currency" value="0">
                                 </label>
                                 <label class="field">
-                                    <span>Fuel/Charging ($)</span>
+                                    <span>Fuel/charging ($/month)</span>
                                     <input type="text" id="fuelCosts" inputmode="decimal" autocomplete="off" data-format="currency" value="0">
                                 </label>
                                 <label class="field">
-                                    <span>Insurance ($)</span>
+                                    <span>Insurance premium ($)</span>
                                     <input type="text" id="autoInsuranceAmount" inputmode="decimal" autocomplete="off" data-format="currency" value="0">
                                 </label>
                                 <label class="field">
-                                    <span>Insurance pay period</span>
+                                    <span>Insurance billed</span>
                                     <select id="autoInsurancePeriod">
                                         <option value="1">Monthly</option>
                                         <option value="3">Quarterly (every 3 months)</option>
@@ -276,29 +299,34 @@
                                 </label>
                             </div>
                             <div id="vehicleExtras" class="extras-container"></div>
-                            <button type="button" class="add-item-btn" onclick="addCustomItem('vehicleExtras')">Add custom item</button>
-                            <p class="category-total sub" id="vehicleTotal">$0.00</p>
+                            <button type="button" class="add-item-btn" data-add-item="vehicleExtras">Add custom item</button>
                         </div>
 
                         <div id="publicTransportSection" class="travel-section hidden">
-                            <h4>Public Transit</h4>
+                            <div class="travel-head">
+                                <h4>Public transit</h4>
+                                <p class="category-total sub" id="publicTransportTotal">$0.00</p>
+                            </div>
                             <div id="publicTransportExtras" class="extras-container"></div>
-                            <button type="button" class="add-item-btn" onclick="addCustomItem('publicTransportExtras')">Add custom item</button>
-                            <p class="category-total sub" id="publicTransportTotal">$0.00</p>
+                            <button type="button" class="add-item-btn" data-add-item="publicTransportExtras">Add custom item</button>
                         </div>
 
                         <div id="rideShareSection" class="travel-section hidden">
-                            <h4>Fare-based Rides</h4>
+                            <div class="travel-head">
+                                <h4>Fare-based rides</h4>
+                                <p class="category-total sub" id="rideShareTotal">$0.00</p>
+                            </div>
                             <div id="rideShareExtras" class="extras-container"></div>
-                            <button type="button" class="add-item-btn" onclick="addCustomItem('rideShareExtras')">Add custom item</button>
-                            <p class="category-total sub" id="rideShareTotal">$0.00</p>
+                            <button type="button" class="add-item-btn" data-add-item="rideShareExtras">Add custom item</button>
                         </div>
 
                         <div id="miscTravelSection" class="travel-section hidden">
-                            <h4>Misc Travel</h4>
+                            <div class="travel-head">
+                                <h4>Misc travel</h4>
+                                <p class="category-total sub" id="miscTravelTotal">$0.00</p>
+                            </div>
                             <div id="miscTravelExtras" class="extras-container"></div>
-                            <button type="button" class="add-item-btn" onclick="addCustomItem('miscTravelExtras')">Add custom item</button>
-                            <p class="category-total sub" id="miscTravelTotal">$0.00</p>
+                            <button type="button" class="add-item-btn" data-add-item="miscTravelExtras">Add custom item</button>
                         </div>
                     </div>
 
@@ -310,10 +338,12 @@
                             </div>
                             <p class="category-total" id="foodTotal">$0.00</p>
                         </div>
-                        <label class="field">
-                            <span>Monthly amount ($)</span>
-                            <input type="text" id="foodExpenses" inputmode="decimal" autocomplete="off" data-format="currency" value="0">
-                        </label>
+                        <div class="list">
+                            <label class="field">
+                                <span>Monthly amount ($)</span>
+                                <input type="text" id="foodExpenses" inputmode="decimal" autocomplete="off" data-format="currency" value="0">
+                            </label>
+                        </div>
                     </div>
 
                     <div class="expense-category">
@@ -325,16 +355,17 @@
                             <p class="category-total" id="additionalTotal">$0.00</p>
                         </div>
                         <div id="additionalExpenses" class="extras-container"></div>
-                        <button type="button" class="add-item-btn" onclick="addCustomItem('additionalExpenses')">Add custom item</button>
+                        <button type="button" class="add-item-btn" data-add-item="additionalExpenses">Add custom item</button>
                     </div>
                 </div>
             </section>
 
-            <section id="summary-section" class="panel">
+            <!-- ============================== Summary ============================== -->
+            <section id="summary-section" class="panel wide" aria-labelledby="summary-heading">
                 <div class="panel-head">
                     <p class="eyebrow">All-in summary</p>
-                    <h2>See the math</h2>
-                    <p class="muted-text">Every deduction and expense is rolled into this view with formulas.</p>
+                    <h2 id="summary-heading">See the math</h2>
+                    <p class="muted-text">Every deduction and expense rolls up into this view.</p>
                 </div>
                 <div class="summary-grid">
                     <div class="summary-card">
@@ -349,7 +380,7 @@
                 <div class="summary-math">
                     <div class="math-step">
                         <p class="label">Step 1</p>
-                        <p class="equation"><span id="calcGrossAnnual">$0.00</span> gross − <span id="calcTotalTax">$0.00</span> taxes = <span id="calcNetAnnual">$0.00</span> net per year</p>
+                        <p class="equation"><span id="calcGrossAnnual">$0.00</span> gross − <span id="calcPretax">$0.00</span> pre-tax − <span id="calcTotalTax">$0.00</span> taxes = <span id="calcNetAnnual">$0.00</span> net per year</p>
                     </div>
                     <div class="math-step">
                         <p class="label">Step 2</p>
@@ -358,8 +389,20 @@
                 </div>
             </section>
         </main>
+
+        <footer class="site-footer">
+            <p>Estimates only, not tax advice. The calculator uses standard deductions and doesn't model itemizing, credits beyond those listed, or every state's phase-outs. Data: <span id="dataYearLabel">2026</span> tax year, last reviewed <span id="dataReviewed">—</span>.</p>
+        </footer>
     </div>
 
-    <script src="./src/script.js"></script>
+    <template id="customItemTemplate">
+        <div class="custom-item-row">
+            <input type="text" class="custom-label" placeholder="Item label" aria-label="Item label">
+            <input type="text" class="custom-value" inputmode="decimal" autocomplete="off" data-format="currency" value="0" aria-label="Monthly amount">
+            <button type="button" class="remove-btn" aria-label="Remove item">Remove</button>
+        </div>
+    </template>
+
+    <noscript><p class="alert">This calculator needs JavaScript turned on.</p></noscript>
 </body>
 </html>
