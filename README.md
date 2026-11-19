@@ -1,7 +1,7 @@
 # Payroll Calculator
 A simple, dynamic calculator for your payroll and monthly expenses.
 
-[View Online](https//richnsd.github.io/payroll-calculator)
+[View Online](https://richnsd.github.io/Payroll-Calculator/)
 
 Enter a salary or hourly wage, pick your state and filing status, and see your take-home pay for every pay period. Then list your monthly bills to see what's left over. Everything auto-saves to your device, and the app works offline once it's installed as a PWA.
 
